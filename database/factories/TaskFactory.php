@@ -19,7 +19,7 @@ class TaskFactory extends Factory
         $categories = ['work', 'personal', 'hobby'];
 
         return [
-            'user_id' => User::factory(),
+            'user_id' => User::inRandomOrder()->first()->id,
             'title' => $this->faker->sentence(4),
             'description' => $this->faker->paragraph(),
             'deadline' => $this->faker->dateTimeBetween('now', '+1 month'),

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Task;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Exception;
@@ -11,12 +12,11 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class UserController extends Controller
 {
-    // Get all users
     public function index(Request $request)
     {
         try {
             $this->authorizeAdmin($request->user());
-            $users = User::withCount('tasks')->get();
+            $users = User::withCount('tasks')->with('roles')->get();
             return response()->json([
                 'status' => 'success',
                 'data' => $users,
@@ -37,12 +37,11 @@ class UserController extends Controller
         }
     }
 
-    // Show a specific user
     public function show(Request $request, $id)
     {
         try {
             $this->authorizeAdmin($request->user());
-            $user = User::findOrFail($id);
+            $user = User::with('roles')->findOrFail($id);
             return response()->json([
                 'status' => 'success',
                 'data' => $user->load('tasks'),
@@ -63,12 +62,11 @@ class UserController extends Controller
         }
     }
 
-    // Update an existing user
     public function update(Request $request, $id)
     {
         try {
             $this->authorizeAdmin($request->user());
-            $user = User::findOrFail($id); // Find user or fail with ModelNotFoundException
+            $user = User::findOrFail($id);
 
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
@@ -108,12 +106,16 @@ class UserController extends Controller
         }
     }
 
-    // Delete a user
     public function destroy(Request $request, $id)
     {
         try {
             $this->authorizeAdmin($request->user());
-            $user = User::findOrFail($id); // Find user or fail with ModelNotFoundException
+            $user = User::findOrFail($id);
+
+            if ($user->tasks()->exists()) {
+                throw new Exception("Cannot delete user because they have assigned tasks.");
+            }
+
             $user->delete();
 
             return response()->json([
@@ -130,19 +132,17 @@ class UserController extends Controller
         } catch (Exception $e) {
             return response()->json([
                 'status' => 'fail',
-                'message' => 'Error deleting user',
+                'message' => $e->getMessage(),
                 'data' => null,
             ], 500);
         }
     }
 
-    // Create a new user
     public function create(Request $request)
     {
         try {
             $this->authorizeAdmin($request->user());
 
-            // Validate user input
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email',
@@ -150,7 +150,10 @@ class UserController extends Controller
             ]);
 
             $validated['password'] = bcrypt($validated['password']);
+
             $user = User::create($validated);
+
+            $user->assignRole('user');
 
             return response()->json([
                 'status' => 'success',
@@ -172,7 +175,56 @@ class UserController extends Controller
         }
     }
 
-    // Check if the user is an admin
+    public function taskAnalytics(Request $request)
+    {
+        try {
+            $this->authorizeAdmin($request->user());
+
+            $users = User::withCount('tasks')
+                ->orderByDesc('tasks_count')
+                ->limit(10)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $users,
+                'message' => 'Task analytics retrieved successfully.',
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Error retrieving task analytics',
+                'data' => null,
+            ], 500);
+        }
+    }
+
+    public function upcomingDeadlineTasks(Request $request)
+    {
+        try {
+            $this->authorizeAdmin($request->user());
+
+            $tasks = Task::where('deadline', '>=', now())
+                ->where('is_completed', false) 
+                ->orderBy('deadline', 'asc') 
+                ->limit(10) 
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $tasks,
+                'message' => 'Top 10 upcoming incomplete tasks retrieved successfully.',
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Error retrieving tasks with upcoming deadlines',
+                'data' => null,
+            ], 500);
+        }
+    }
+
+
     private function authorizeAdmin($user)
     {
         if (!$user->hasRole('admin')) {
