@@ -17,6 +17,6 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
         ]);
 
-        \App\Models\Task::factory(30)->create();
+        \App\Models\Task::factory(100)->create();
     }
 }

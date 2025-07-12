@@ -27,4 +27,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // for dashboard
     Route::get('task-analytics', [UserController::class, 'taskAnalytics']);
     Route::get('upcoming-deadline-tasks', [UserController::class, 'upcomingDeadlineTasks']);
+    Route::get('upcoming-user-deadline-tasks', [UserController::class, 'upcomingUserDeadlineTasks']);
+
+    Route::put('/edit-profile', [UserController::class, 'editProfile']);
+
+
 });

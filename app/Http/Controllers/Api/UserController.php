@@ -16,7 +16,7 @@ class UserController extends Controller
     {
         try {
             $this->authorizeAdmin($request->user());
-            $users = User::withCount('tasks')->with('roles')->get();
+            $users = User::where('id', '!=', 1)->withCount('tasks')->with('roles')->get();
             return response()->json([
                 'status' => 'success',
                 'data' => $users,
@@ -74,8 +74,10 @@ class UserController extends Controller
                 'password' => 'nullable|min:6',
             ]);
 
-            if (isset($validated['password'])) {
+            if (isset($validated['password']) && $validated['password'] !== '') {
                 $validated['password'] = bcrypt($validated['password']);
+            } else {
+                unset($validated['password']);
             }
 
             $user->update($validated);
@@ -101,6 +103,53 @@ class UserController extends Controller
             return response()->json([
                 'status' => 'fail',
                 'message' => 'Error updating user',
+                'data' => null,
+            ], 500);
+        }
+    }
+
+    public function editProfile(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $freshUser = User::findOrFail($user->id);
+
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|unique:users,email,' . $freshUser->id,
+                'password' => 'nullable|string|min:6',
+            ]);
+
+            if (isset($validated['password']) && $validated['password'] !== '') {
+                $validated['password'] = bcrypt($validated['password']);
+            } else {
+                unset($validated['password']);
+            }
+
+            $freshUser->update($validated);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $freshUser,
+                'message' => 'Profile updated successfully.',
+            ]);
+        } catch (ModelNotFoundException $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'User not found',
+                'data' => null,
+            ], 404);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Validation error',
+                'data' => $e->errors(),
+            ], 422);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Error updating profile',
                 'data' => null,
             ], 500);
         }
@@ -205,9 +254,9 @@ class UserController extends Controller
             $this->authorizeAdmin($request->user());
 
             $tasks = Task::where('deadline', '>=', now())
-                ->where('is_completed', false) 
-                ->orderBy('deadline', 'asc') 
-                ->limit(10) 
+                ->where('is_completed', false)
+                ->orderBy('deadline', 'asc')
+                ->limit(10)
                 ->get();
 
             return response()->json([
@@ -224,6 +273,32 @@ class UserController extends Controller
         }
     }
 
+    public function upcomingUserDeadlineTasks(Request $request)
+    {
+        try {
+            $user = $request->user();
+
+            $tasks = Task::where('user_id', $user->id)
+                ->where('deadline', '>=', now())
+                ->where('is_completed', false)
+                ->orderBy('deadline', 'asc')
+                ->limit(2)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $tasks,
+                'message' => 'Your upcoming tasks retrieved successfully.',
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 'fail',
+                'message' => 'Error retrieving your upcoming tasks',
+                'data' => null,
+            ], 500);
+        }
+    }
+
 
     private function authorizeAdmin($user)
     {
@@ -231,4 +306,5 @@ class UserController extends Controller
             abort(403, 'Unauthorized');
         }
     }
+
 }
