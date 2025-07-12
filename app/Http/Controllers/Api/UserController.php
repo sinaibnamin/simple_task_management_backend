@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\UserNameUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Task;
@@ -81,6 +82,10 @@ class UserController extends Controller
             }
 
             $user->update($validated);
+
+            if (isset($validated['name'])) {
+                event(new UserNameUpdated($user->id, $user->name));
+            }
 
             return response()->json([
                 'status' => 'success',
